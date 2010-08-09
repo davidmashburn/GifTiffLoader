@@ -126,7 +126,10 @@ def LoadSingle(filename=None):
         endianness=fid.read(2)
         fid.close()
         if endianness=='MM':
-            t.byteswap(True)
+            # I assume no one will use earlier than 1.1.4
+            # 1.1.4 to 1.1.6 had a bug; fixed in 1.1.7 and later
+            if Image.VERSION in ['1.1.4','1.1.5','1.1.6']:
+                t.byteswap(True)
         elif endianness=='II':
             pass
         else:
@@ -214,7 +217,7 @@ def SaveFileSequence(arr,basename=None,format='gif',tiffBits=16):
         print 'Unsupported Format!  Choose Gif or Tiff format'
         return
     
-    if dtype==np.uint8 and arr.max()>255:
+    if arr.dtype==np.uint8 and arr.max()>255:
         arr=np.array(arr*255./arr.max(),np.uint8)
     
     if len(arr.shape)==2:
@@ -270,7 +273,10 @@ def LoadMonolithic(filename=None):
         endianness=fid.read(2)
         fid.close()
         if endianness=='MM':
-            t.byteswap(True)
+            # I assume no one will use earlier than 1.1.4
+            # 1.1.4 to 1.1.6 had a bug; fixed in 1.1.7 and later
+            if Image.VERSION in ['1.1.4','1.1.5','1.1.6']:
+                t.byteswap(True)
         elif endianness=='II':
             pass
         else:
@@ -311,7 +317,10 @@ def LoadFrameFromMonolithic(filename=None,frameNum=0):
             endianness=fid.read(2)
             fid.close()
             if endianness=='MM':
-                t.byteswap(True)
+                # I assume no one will use earlier than 1.1.4
+                # 1.1.4 to 1.1.6 had a bug; fixed in 1.1.7 and later
+                if Image.VERSION in ['1.1.4','1.1.5','1.1.6']:
+                    t.byteswap(True)
             elif endianness=='II':
                 pass
             else:
