@@ -1,3 +1,16 @@
+"""GifTiffLoader is a module to automatically load Tiff and Gif files as
+numpy arrays using PIL.  Specifically it is designed to deal with 8-bit
+and 16-bit images typically used as the standard formats for microscope
+images.  It is also designed to deal with image stacks (Animated Gifs and
+Multi-page Tiffs) and image sequences (both 3D and 4D sequences).
+
+GifTiffLoader relies on two other modules, FilenameSort and cmpGen.
+
+Sponsored by the NSF and HFSP through the Shane Hutson Laboratory, part of
+Vanderbilt Institute of Integrative Biosystems Research (VIIBRE)."""
+
+__author__ = "David N. Mashburn <david.n.mashburn@gmail.com>"
+
 import os
 import numpy as np
 import Image
@@ -80,6 +93,37 @@ def GetShape(filename=None):
     
     return numFrames,w,h
 
+def GetDatatype(im):
+    """Automatically determine the datatype using the PIL -> numpy conversion."""
+    
+    # Old way:
+    #if im.format in _tif_names:  datatype=np.uint16
+    #elif im.format in _gif_names: datatype=np.uint8
+    
+    t=np.array(im)
+    
+    # Work around for windows:
+    if t.dtype==np.object:
+        if im.mode=='L': # 8-bit gray scale
+            datatype = np.uint8
+        elif im.mode=='I;16': # 16-bit gray scale
+            datatype = np.uint16
+        elif im.mode in ['I','F']: # 32-bit gray scale (int and float)
+            print '32-bit images not supported at this time!'
+        else:
+            print 'Unknown image type!  Assume to 16-bit...'
+            datatype = np.uint16
+    elif t.dtype in [np.uint8,np.uint16,np.float32]:
+        datatype = t.dtype
+    elif t.dtype==np.int16:
+        datatype = np.uint16 # Convert from int16 to uint16 (same as what ImageJ does [I think])
+    else:
+        print 'What kind of image format is this anyway???'
+        print 'Should be a 16 or 32 bit tiff or 8 bit unsigned gif or tiff'
+        return
+    
+    return datatype
+
 def GetShapeMonolithicOrSequence(filename=None):
     if filename==None:
         filename=wx.FileSelector()
@@ -102,12 +146,26 @@ def LoadSingle(filename=None):
     
     # TODO: Need to add more smarts to this based on the mode 'I;16' vs. RGB, etc...
     #'1','P','RGB','RGBA','L','F','CMYK','YCbCr','I',
-    # Can I simplify this by simply fixing the PIL -> numpy conversion
+    # Can I simplify this by simply fixing the PIL -> numpy conversion?
     
     #if im.format in _tif_names:  datatype=np.uint16
     #elif im.format in _gif_names: datatype=np.uint8
     
+    # Try to automatically determine the datatype using the
+    # PIL -> numpy conversion.
     t=np.array(im)
+    
+    # Work around for windows:
+    if t.dtype==np.object:
+        if im.mode=='L': # 8-bit gray scale
+            t=np.array(im.getdata(),np.uint8)
+        elif im.mode=='I;16': # 16-bit gray scale
+            t=np.array(im.getdata(),np.uint16)
+        elif im.mode in ['I','F']: # 32-bit gray scale (int and float)
+            print '32-bit images not supported at this time!'
+        else:
+            print 'Unknown image type!  Assume to 16-bit...'
+            t=np.array(im.getdata(),np.uint16)
     
     if t.dtype in [np.uint8,np.uint16,np.float32]:
         pass
@@ -120,7 +178,7 @@ def LoadSingle(filename=None):
     
     t.resize(im.size[1],im.size[0])
     
-    # Patch around PIL's Tiff stupidity...
+    # Patch around 16-bit endianness bug for PIL before version 1.1.7...
     if im.format in _tif_names:
         fid=open(filename,'rb')
         endianness=fid.read(2)
@@ -240,8 +298,7 @@ def LoadMonolithic(filename=None):
         filename=wx.FileSelector()
     im=Image.open(filename)
     
-    if im.format in _tif_names:  datatype=np.uint16
-    elif im.format in _gif_names: datatype=np.uint8
+    datatype = GetDatatype(im)
     
     l=[]
     numFrames=0
@@ -253,21 +310,11 @@ def LoadMonolithic(filename=None):
         except EOFError:
             break # end of sequence
     
-    t=np.array(l,dtype=datatype) # Oops--was t=np.array(im)!!
-    
-    #No need for this any more...
-    #    if t.dtype in [np.uint8,np.uint16]:
-    #        pass
-    #    elif t.dtype==np.int16:
-    #        t=np.uint16(t) # Convert from int16 to uint16 (same as what ImageJ does [I think])
-    #    else:
-    #        print 'What kind of image fomrat is this anyway???'
-    #        print 'Should be a 16bit tiff or 8bit unsigned gif or tiff.'
-    #        return
+    t=np.array(l,dtype=datatype)
     
     t.resize(numFrames,im.size[1],im.size[0])
     
-    # Patch around PIL's Tiff stupidity...
+    # Patch around 16-bit endianness bug for PIL before version 1.1.7...
     if im.format=='TIFF':
         fid=open(filename,'rb')
         endianness=fid.read(2)
@@ -291,8 +338,7 @@ def LoadFrameFromMonolithic(filename=None,frameNum=0):
         filename=wx.FileSelector()
     im=Image.open(filename)
     
-    if im.format in _tif_names:  datatype=np.uint16
-    elif im.format in _gif_names: datatype=np.uint8
+    datatype = GetDatatype(im)
     
     t=None
     i=0
@@ -311,7 +357,7 @@ def LoadFrameFromMonolithic(filename=None,frameNum=0):
         print 'Frame not able to be loaded'
         return t
     else:
-        # Patch around PIL's Tiff stupidity...
+        # Patch around 16-bit endianness bug for PIL before version 1.1.7...
         if im.format=='TIFF':
             fid=open(filename,'rb')
             endianness=fid.read(2)
@@ -340,8 +386,7 @@ def LoadMonolithicOrSequenceSpecial(filename=None):
     
     if isSequence:
         files = getSortedListOfNumericalEquivalentFiles(
-                                    filename,os.path.split(filename)[0]
-                                                       )
+                                    filename,os.path.split(filename)[0])
         if len(files)==0:
             print 'Empty Directory!'
             return
