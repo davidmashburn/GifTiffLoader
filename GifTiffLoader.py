@@ -38,9 +38,9 @@ def DivideConvertType(arr,bits=16,maxVal=None,zeroMode='clip',maxMode='clip'):
         maxVal=arr.max()
     elif type(maxVal)==int:
         if maxMode=='clip':
-            arr=arr.clip(arr.min(),maxVal)
+            arr.clip(arr.min(),maxVal,out=arr) # in place
         elif maxMode=='stretch':
-            arr=arr.clip(arr.min(),arr.max()) # Now maxVal is used at the end instead...
+            # Now maxVal is used at the end instead...
             maxClip = maxVal
         else:
             print "'maxMode' must be either 'clip' or 'stretch'"
@@ -51,18 +51,21 @@ def DivideConvertType(arr,bits=16,maxVal=None,zeroMode='clip',maxMode='clip'):
     minVal=0
     
     if zeroMode=='clip':
-        arr=arr.clip(0,arr.max())
+        arr.clip(0,arr.max(),out=arr) # in place
     elif zeroMode=='abs':
-        arr=np.absolute(arr)
+        np.absolute(arr,arr) # in place
     elif zeroMode=='stretch':
         minVal=arr.min()
     else:
         print "'zeroMode' must be one of: 'clip' , 'abs' , 'stretch'"
     
-    arr=np.double(arr)-minVal
+    clipRatio = 1.*maxClip/(maxVal-minVal)
     
-    if (maxVal-minVal)>maxClip:
-        arr=arr*maxClip/(maxVal-minVal)
+    if zeroMode=='stretch' or clipRatio<1:
+        arr = np.double(arr)
+        arr -= minVal # separate step cuts down on memory usage...
+        if clipRatio<1:
+            arr *= clipRatio
     
     return np.array(arr,dtype=type_dict[bits])
 
@@ -172,7 +175,7 @@ def LoadSingle(filename=None):
     elif t.dtype==np.int16:
         t=np.uint16(t) # Convert from int16 to uint16 (same as what ImageJ does [I think])
     else:
-        print 'What kind of image fomrat is this anyway???'
+        print 'What kind of image format is this anyway???'
         print 'Should be a 16 or 32 bit tiff or 8 bit unsigned gif or tiff'
         return
     
@@ -261,7 +264,13 @@ def LoadFileSequence(dirname=None,wildcard='*[!.txt]'):
     
     return t
 
-def SaveFileSequence(arr,basename=None,format='gif',tiffBits=16):
+def SaveFileSequence(arr,basename=None,format='gif',tiffBits=16,sparseSave=None,functionToRunOnFrames=None):
+    '''Save a sequence of files with the format _t_zzz where t is the
+stack number and zzz is the frame number.
+"tiffBits" should be 8 or 16.
+"sparseSave" should either be None (the default) or a boolean list the same shape as the z-t shape of the array.
+If specified, it determines which files should be saved and which should not.
+It is basically a way to save only SOME of the files in the sequence.'''
     if basename==None:
         basename=wx.SaveFileSelector('Array as Sequence of Gifs -- numbers automatically added to','.'+format)
     
@@ -278,15 +287,26 @@ def SaveFileSequence(arr,basename=None,format='gif',tiffBits=16):
     if arr.dtype==np.uint8 and arr.max()>255:
         arr=np.array(arr*255./arr.max(),np.uint8)
     
+    if functionToRunOnFrames==None:
+        functionToRunOnFrames=( lambda x:x )
+    
     if len(arr.shape)==2:
-        SaveSingle(arr,os.path.splitext(basename)[0]+'_0_000'+'.'+format,format=format,tiffBits=tiffBits)
+        SaveSingle(functionToRunOnFrames(arr),os.path.splitext(basename)[0]+'_0_000'+'.'+format,format=format,tiffBits=tiffBits)
     elif len(arr.shape)==3:
+        if sparseSave==None:
+            sparseSave=[True]*arr.shape[0]
         for i in range(arr.shape[0]):
-            SaveSingle(arr[i],os.path.splitext(basename)[0]+'_0_'+str('%03d' % i)+'.'+format,format=format,tiffBits=tiffBits)
+            if sparseSave[i]:
+                SaveSingle(functionToRunOnFrames(arr[i]),os.path.splitext(basename)[0]+'_0_'+str('%03d' % i)+'.'+format,format=format,tiffBits=tiffBits)
     elif len(arr.shape)==4:
+        if sparseSave==None:
+            sparseSave=[True]*arr.shape[0]
+            for i in range(arr.shape[0]):
+                sparseSave[i]=[True]*arr.shape[1]
         for i in range(arr.shape[0]):
             for j in range(arr.shape[1]):
-                SaveSingle(arr[i,j],os.path.splitext(basename)[0]+'_'+str(i)+'_'+str('%03d' % j)+'.'+format,format=format,tiffBits=tiffBits)
+                if sparseSave[i][j]:
+                    SaveSingle(functionToRunOnFrames(arr[i,j]),os.path.splitext(basename)[0]+'_'+str(i)+'_'+str('%03d' % j)+'.'+format,format=format,tiffBits=tiffBits)
     else:
         print 'This function does not support saving arrays with more than 4 dimensions!'
 
@@ -432,6 +452,28 @@ def LoadSequence4D(dirname=None,wildcard='*[!.txt]'):
         t[i[1],i[2]]=LoadSingle(i[0]) #load the data for each gif directly into one big array, indexing based on numbering
     
     return t
+
+def LoadGroupedZCroppedByTxtInput(dirname,StartStopTxt,mergeOperation=None):
+    """StartStopTxt gives the range to load for each stack... "0: 4-9\n1: 5-10\n2: 5-11"
+The stack number before the colon is NOT ACTUALLY USED, stacks are just processed in order.
+For mergeOperation, select 'None','mean','max','min',or 'sum'"""
+    StartStop = [map(int,i.replace(' ','').split(':')[1].split('-')) for i in StartStopTxt.split('\n')]
+    stacks = []
+    for i,p in enumerate(StartStop):
+        stacks.append([])
+        files = getSortedListOfFiles(dirname,globArg="*_"+str(i)+"_*PMT1.TIF")
+        files = files[p[0]:p[1]+1] # only pick out some files
+        for f in files:
+            stacks[-1].append(LoadSingle(f))
+        stacks[-1]=np.array(stacks[-1])
+    
+    if mergeOperation in ['mean','max','min','sum']:
+        return np.array([i.__getattribute__(mergeOperation)(axis=0) for i in stacks])
+    elif mergeOperation!=None:
+        print 'Invalid mergeOperation!  Returning the stacks list instead'
+    
+    return stacks # has to be a list not an array b/c elements might not be the same length
+        
 
 if __name__=='__main__':
     app=wx.App(0)
