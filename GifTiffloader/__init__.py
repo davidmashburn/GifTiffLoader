@@ -1,1 +1,1 @@
-from GifTiffloader import *
+from GifTiffLoader import *
