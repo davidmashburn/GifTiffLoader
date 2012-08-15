@@ -1,0 +1,79 @@
+#!/usr/bin/env python
+#PySlices Save Format Version 1.2 (PySlices v0.9.8 and later)
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Output Slice
+#PySlices 0.9.8 - The Flakiest Python Shell... Cut up!
+#Python 2.6.4 (r264:75706, Dec  7 2009, 18:43:55) 
+#[GCC 4.4.1] on linux2
+#Type "help", "copyright", "credits" or "license" for more information.
+#Startup script executed: /home/mashbudn/.pyslices/startup
+#/media/home/Programming/Python
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
+import wx
+from pylab import *
+import GifTiffLoader
+reload(GifTiffLoader)
+GTL = GifTiffLoader
+#PySlices Marker Information -- Begin Output Slice
+#<module 'GifTiffLoader' from 'GifTiffLoader.pyc'>
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
+f=wx.FileSelector()
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
+tif16 = u'/home/mashbudn/Documents/VIIBRE--ScarHealing/ActiveData/Stack_Zproject_GBR_DC.tif' 
+tif8 = u'/home/mashbudn/Documents/VIIBRE--ScarHealing/ActiveData/Stack_Zproject_GBR_DC 8-bit.tif'
+gif8 = u'/home/mashbudn/Documents/VIIBRE--ScarHealing/ActiveData/Stack_Zproject_GBR_DC.gif'
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
+t16=GTL.LoadSingle(tif16)
+t8=GTL.LoadSingle(tif8)
+g8=GTL.LoadSingle(gif8)
+t16m=GTL.LoadMonolithic(tif16)
+t8m=GTL.LoadMonolithic(tif8)
+g8m=GTL.LoadMonolithic(gif8)
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
+t16b = GTL.DivideConvertType(t16,bits=16,maxVal=2**15-1,zeroMode='stretch',maxMode='stretch')
+t8b = GTL.DivideConvertType(t8,bits=16,maxVal=2**15-1,zeroMode='stretch',maxMode='stretch')
+g8b = GTL.DivideConvertType(g8,bits=16,maxVal=2**15-1,zeroMode='stretch',maxMode='stretch')
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
+t16.dtype,t16.min(),t16.max()
+t8.dtype,t8.min(),t8.max()
+g8.dtype,g8.min(),g8.max()
+
+t16m[0].dtype,t16m[0].min(),t16m[0].max()
+t8m[0].dtype,t8m[0].min(),t8m[0].max()
+g8m[0].dtype,g8m[0].min(),g8m[0].max()
+
+t16b.dtype,t16b.min(),t16b.max()
+t8b.dtype,t8b.min(),t8b.max()
+g8b.dtype,g8b.min(),g8b.max()
+#PySlices Marker Information -- Begin Output Slice
+#(dtype('uint16'), 0, 38267)
+#(dtype('uint8'), 0, 242)
+#(dtype('uint8'), 0, 242)
+#(dtype('uint16'), 0, 38267)
+#(dtype('uint8'), 0, 242)
+#(dtype('uint8'), 0, 242)
+#(dtype('uint16'), 0, 38267)
+#(dtype('uint16'), 0, 242)
+#(dtype('uint16'), 0, 242)
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
+imshow(t16b)
+#PySlices Marker Information -- Begin Output Slice
+#<matplotlib.image.AxesImage object at 0x49d7410>
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
+#Hooray!
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
+od = GTL.DivideConvertType(g8,bits=16,maxVal=2**15-1,zeroMode='stretch',maxMode='stretch')
+imshow(od)
+#PySlices Marker Information -- Begin Output Slice
+#<matplotlib.image.AxesImage object at 0x4c5bd50>
+#PySlices Marker Information -- Begin Grouping Slice
+#PySlices Marker Information -- Begin Input Slice
