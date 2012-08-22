@@ -2,7 +2,7 @@ from distutils.core import setup
 
 setup(
     name='GifTiffLoader',
-    version='0.1.1',
+    version='0.1.2',
     author='David N. Mashburn',
     author_email='david.n.mashburn@gmail.com',
     packages=['GifTiffLoader'],
@@ -12,6 +12,7 @@ setup(
     description='',
     long_description=open('README.rst').read(),
     install_requires=[
+         "wxPython>=2.6"
          "numpy >= 0.9",
          "PIL >= 1.1.5",
     ],
