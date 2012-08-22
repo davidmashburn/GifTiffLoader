@@ -393,7 +393,6 @@ def LoadMonolithic(filename=None):
     
     return t
 
-#NOT TESTED YET!!!
 def LoadFrameFromMonolithic(filename=None,frameNum=0):
     #f='C:/Documents and Settings/Owner/Desktop/Stack_Zproject_GBR_DC.gif'
     if filename==None:
@@ -408,7 +407,7 @@ def LoadFrameFromMonolithic(filename=None,frameNum=0):
     while 1:
         if i==frameNum:
             t = np.asarray(im.getdata(),dtype=datatype)
-            t.resize(numFrames,im.size[1],im.size[0])
+            t.resize(im.size[1],im.size[0])
             break
         i+=1
         try:
