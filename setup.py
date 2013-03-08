@@ -9,11 +9,12 @@ setup(
     scripts=[],
     url='http://pypi.python.org/pypi/GifTiffLoader/',
     license='LICENSE.txt',
-    description='',
+    description='automatically load multi-dimensional Tiff and Gif files and file sequences as numpy arrays using PIL',
     long_description=open('README.rst').read(),
     install_requires=[
          #'wxPython>=2.6', # wxPython isn't being found correctly by setuptools -- please install it manually!
          "numpy >= 0.9",
          "PIL >= 1.1.5",
+         "FilenameSort >= 0.1.1"
     ],
 )
