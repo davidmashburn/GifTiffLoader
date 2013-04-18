@@ -1,8 +1,12 @@
 from distutils.core import setup
 
+# Read the version number
+with open("GifTiffLoader/_version.py") as f:
+    exec(f.read())
+
 setup(
     name='GifTiffLoader',
-    version='0.1.4',
+    version=__version__,
     author='David N. Mashburn',
     author_email='david.n.mashburn@gmail.com',
     packages=['GifTiffLoader'],

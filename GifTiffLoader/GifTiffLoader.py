@@ -4,7 +4,7 @@ and 16-bit images typically used as the standard formats for microscope
 images.  It is also designed to deal with image stacks (Animated Gifs and
 Multi-page Tiffs) and image sequences (both 3D and 4D sequences).
 
-GifTiffLoader relies on two other modules, FilenameSort and cmpGen.
+GifTiffLoader also relies on wxPython and FilenameSort.
 
 Sponsored by the NSF and HFSP through the Shane Hutson Laboratory, part of
 Vanderbilt Institute of Integrative Biosystems Research (VIIBRE)."""
