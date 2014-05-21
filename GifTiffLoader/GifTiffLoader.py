@@ -71,10 +71,35 @@ def DivideConvertType(arr,bits=16,maxVal=None,zeroMode='clip',maxMode='clip'):
 
 def ConvertTo8Bit(arr):
     return DivideConvertType(arr,8)    
+
 def ConvertTo16Bit(arr):
     return DivideConvertType(arr,16)
+
 def ConvertTo32Bit(arr):
     return arr.asarray(np.float32) #DivideConvertType(t,32) # b/c we want 32 bit float, not uint
+
+def Convert16BitToRGBImage(arr16):
+    '''Transform a 16 bit image into an rgba image with:
+       red: most significant
+       green: least significant
+       blue: 0'''
+    return np.asarray(a.byteswap(),np.uint32).view(np.uint8).reshape(a.shape+(4,))[:,:,:3]
+
+def Convert16BitToRGBAImage(arr16):
+    '''Transform a 16 bit image into an rgba image with:
+       red: most significant
+       green: least significant
+       blue: 0
+       alpha: 255'''
+    rgba = np.asarray(a.byteswap(),np.uint32).view(np.uint8).reshape(a.shape+(4,))
+    rgba[:,:,3] = 255
+    return rgba
+
+def ConvertRGBImageTo16Bit(rgb):
+    '''Convert the red&green channels of an rgb(a) image to a 16 bit image, with:
+       red: most significant
+       green: least significant'''
+    return np.array(rgb[:,:,::-2]).view(np.uint16).reshape(rgb.shape[:2])    
 
 def GetShape(filename=None):
     if filename==None:
