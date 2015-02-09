@@ -170,7 +170,7 @@ def GetDatatype(im):
     if t.dtype==np.object:
         if im.mode=='L': # 8-bit gray scale
             datatype = np.uint8
-        elif im.mode=='I;16': # 16-bit gray scale
+        elif im.mode in ['I;16', 'I;16B']: # 16-bit gray scale
             datatype = np.uint16
         elif im.mode in ['I','F']: # 32-bit gray scale (int and float)
             print '32-bit images not supported at this time!'
@@ -179,10 +179,11 @@ def GetDatatype(im):
             datatype = np.uint16
     elif t.dtype in [np.uint8,np.uint16,np.float32]:
         datatype = t.dtype
-    elif t.dtype==np.int16:
+    elif t.dtype in [np.int16, np.dtype('>u2'), np.dtype('>i2')]:
         datatype = np.uint16 # Convert from int16 to uint16 (same as what ImageJ does [I think])
     else:
         print 'What kind of image format is this anyway???'
+        print 'Datatype looks like:', t.dtype
         print 'Should be a 16 or 32 bit tiff or 8 bit unsigned gif or tiff'
         return
     
