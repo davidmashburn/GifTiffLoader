@@ -18,7 +18,7 @@ setup(
     install_requires=[
          #'wxPython>=2.6', # wxPython isn't being found correctly by setuptools -- please install it manually!
          "numpy >= 0.9",
-         "PIL >= 1.1.5",
+         "pillowfight", # Depend on either PIL or pillow if available (PIL must be at least version 1.1.5)
          "FilenameSort >= 0.1.1"
     ],
 )
