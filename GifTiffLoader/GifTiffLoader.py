@@ -13,7 +13,12 @@ __author__ = "David N. Mashburn <david.n.mashburn@gmail.com>"
 
 import os
 import numpy as np
-import Image
+
+try:
+    from PIL import Image # Use pillow if available
+except:
+    import Image # Fall back on old PIL
+
 import wx
 
 from FilenameSort import cmp_fnames,cmp_fnames_A,getSortedListOfFiles, \
