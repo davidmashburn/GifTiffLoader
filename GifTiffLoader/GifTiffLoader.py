@@ -162,17 +162,22 @@ def GetDirectoryShape(dirname=None,wildcard='*[!.txt]',dims=1):
         print 'No code for 5D stacks... yet...'
         return # Should throw downstream errors... just sayin...
 
-def GetDatatype(im):
+def GetDatatype(im, im_arr=None):
     """Automatically determine the datatype using the PIL -> numpy conversion."""
+    
+    # TODO: Need to add more smarts to this based on the mode 'I;16' vs. RGB, etc...
+    #'1','P','RGB','RGBA','L','F','CMYK','YCbCr','I',
+    # Can I simplify this by simply fixing the PIL -> numpy conversion?
     
     # Old way:
     #if im.format in _tif_names:  datatype=np.uint16
     #elif im.format in _gif_names: datatype=np.uint8
     
-    t=np.array(im)
+    if im_arr is None:
+        im_arr=np.array(im)
     
     # Work around for windows:
-    if t.dtype==np.object:
+    if im_arr.dtype==np.object:
         if im.mode=='L': # 8-bit gray scale
             datatype = np.uint8
         elif im.mode in ['I;16', 'I;16B']: # 16-bit gray scale
@@ -182,9 +187,9 @@ def GetDatatype(im):
         else:
             print 'Unknown image type!  Assume to 16-bit...'
             datatype = np.uint16
-    elif t.dtype in [np.uint8,np.uint16,np.float32]:
-        datatype = t.dtype
-    elif t.dtype in [np.int16, np.dtype('>u2'), np.dtype('>i2')]:
+    elif im_arr.dtype in [np.uint8,np.uint16,np.float32]:
+        datatype = im_arr.dtype
+    elif im_arr.dtype in [np.int16, np.dtype('>u2'), np.dtype('>i2')]:
         datatype = np.uint16 # Convert from int16 to uint16 (same as what ImageJ does [I think])
     else:
         print 'What kind of image format is this anyway???'
@@ -215,57 +220,27 @@ def LoadSingle(filename=None):
         filename=wx.FileSelector()
         print filename
     im=Image.open(filename)
-    
-    # TODO: Need to add more smarts to this based on the mode 'I;16' vs. RGB, etc...
-    #'1','P','RGB','RGBA','L','F','CMYK','YCbCr','I',
-    # Can I simplify this by simply fixing the PIL -> numpy conversion?
-    
-    #if im.format in _tif_names:  datatype=np.uint16
-    #elif im.format in _gif_names: datatype=np.uint8
-    
-    # Try to automatically determine the datatype using the
-    # PIL -> numpy conversion.
-    t=np.array(im)
-    
-    # Work around for windows:
-    if t.dtype==np.object:
-        if im.mode=='L': # 8-bit gray scale
-            t=np.array(im.getdata(),np.uint8)
-        elif im.mode=='I;16': # 16-bit gray scale
-            t=np.array(im.getdata(),np.uint16)
-        elif im.mode in ['I','F']: # 32-bit gray scale (int and float)
-            print '32-bit images not supported at this time!'
-        else:
-            print 'Unknown image type!  Assume to 16-bit...'
-            t=np.array(im.getdata(),np.uint16)
-    
-    if t.dtype in [np.uint8,np.uint16,np.float32]:
-        pass
-    elif t.dtype==np.int16:
-        t=np.uint16(t) # Convert from int16 to uint16 (same as what ImageJ does [I think])
-    else:
-        print 'What kind of image format is this anyway???'
-        print 'Should be a 16 or 32 bit tiff or 8 bit unsigned gif or tiff'
-        return
-    
-    t.resize(im.size[1],im.size[0])
-    
-    # Patch around 16-bit endianness bug for PIL before version 1.1.7...
-    if im.format in _tif_names:
-        fid=open(filename,'rb')
-        endianness=fid.read(2)
-        fid.close()
-        if endianness=='MM':
-            # I assume no one will use earlier than 1.1.4
-            # 1.1.4 to 1.1.6 had a bug; fixed in 1.1.7 and later
-            if Image.VERSION in ['1.1.4','1.1.5','1.1.6']:
-                t.byteswap(True)
-        elif endianness=='II':
-            pass
-        else:
-            print "Just so you know... that ain't no tiff!"
-    
-    return t
+    im_arr=np.array(im)
+    # Try to automatically determine the datatype using the PIL -> numpy conversion.
+    datatype = GetDatatype(im, im_arr)
+    im_arr = (im_arr.astype(datatype)
+              if im_arr.dtype!=np.object else
+              np.array(im.getdata(), datatype)) # work around for windows
+    im_arr.resize(im.size[1],im.size[0])
+    return im_arr
+
+# No longer needed:
+# Patch around 16-bit endianness bug for PIL before version 1.1.7...
+#if Image.VERSION in ['1.1.4','1.1.5','1.1.6'] and im.format in _tif_names:
+#    fid=open(filename,'rb')
+#    endianness=fid.read(2)
+#    fid.close()
+#    if endianness=='MM':
+#        t.byteswap(True)
+#    elif endianness=='II':
+#        pass
+#    else:
+#        print "Just so you know... that ain't no tiff!"
 
 # I also need to check for filenames with the same base in the selected folder
 # And then give a "stupidity check" for overwriting
@@ -404,24 +379,7 @@ def LoadMonolithic(filename=None):
             break # end of sequence
     
     t=np.array(l,dtype=datatype)
-    
     t.resize(numFrames,im.size[1],im.size[0])
-    
-    # Patch around 16-bit endianness bug for PIL before version 1.1.7...
-    if im.format=='TIFF':
-        fid=open(filename,'rb')
-        endianness=fid.read(2)
-        fid.close()
-        if endianness=='MM':
-            # I assume no one will use earlier than 1.1.4
-            # 1.1.4 to 1.1.6 had a bug; fixed in 1.1.7 and later
-            if Image.VERSION in ['1.1.4','1.1.5','1.1.6']:
-                t.byteswap(True)
-        elif endianness=='II':
-            pass
-        else:
-            print "Just so you know... that ain't no tiff!"
-    
     return t
 
 def LoadFrameFromMonolithic(filename=None,frameNum=0):
@@ -448,24 +406,8 @@ def LoadFrameFromMonolithic(filename=None,frameNum=0):
     
     if t==None:
         print 'Frame not able to be loaded'
-        return t
-    else:
-        # Patch around 16-bit endianness bug for PIL before version 1.1.7...
-        if im.format=='TIFF':
-            fid=open(filename,'rb')
-            endianness=fid.read(2)
-            fid.close()
-            if endianness=='MM':
-                # I assume no one will use earlier than 1.1.4
-                # 1.1.4 to 1.1.6 had a bug; fixed in 1.1.7 and later
-                if Image.VERSION in ['1.1.4','1.1.5','1.1.6']:
-                    t.byteswap(True)
-            elif endianness=='II':
-                pass
-            else:
-                print "Just so you know... that ain't no tiff!"
-        
-        return t
+    
+    return t
 
 def SaveMonolithic(arr,filename=None):
     pass #Coming soon! -- see Examples/PIL Examples/gifmaker
