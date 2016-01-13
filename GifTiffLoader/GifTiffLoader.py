@@ -21,58 +21,70 @@ except:
 
 import wx
 
-from FilenameSort import cmp_fnames,cmp_fnames_A,getSortedListOfFiles, \
-                         getSortedListOfNumericalEquivalentFiles
+from FilenameSort import (cmp_fnames, cmp_fnames_A, getSortedListOfFiles,
+                          getSortedListOfNumericalEquivalentFiles as get_ne_files)
 
 # This module can load and save .tiff and .gif formats as numpy arrays...
 
-_gif_names=['gif','GIF','Gif']
-_tif_names=['tif','TIF','Tif','tiff','TIFF','Tiff']
+_gif_names = 'gif GIF Gif'.split()
+_tif_names = 'tif TIF Tif tiff TIFF Tiff'.split()
 
-def DivideConvertType(arr,bits=16,maxVal=None,zeroMode='clip',maxMode='clip'):
+def _select_file_if_none(filename, use_print=False):
+    if filename is None:
+        filename = wx.FileSelector()
+        if use_print:
+            print filename
+    
+    return filename
+
+def _select_dir_if_none(dirname, use_print=False):
+    if dirname is None:
+        dirname = wx.DirSelector()
+        if use_print:
+            print dirname
+    
+    return dirname
+    
+
+def DivideConvertType(arr, bits=16, maxVal=None, zeroMode='clip',
+                      maxMode='clip'):
     #Get datatype from bits...
     # Note that this function is only useful for unsigned ints!
-    type_dict={8:np.uint8,16:np.uint16,32:np.uint32,64:np.uint64}
+    assert maxMode in ['clip', 'stretch'], \
+           "'maxMode' must be either 'clip' or 'stretch'"
+    assert type(maxVal) == [type(None), int], \
+           "'maxVal' must be given as an integer (or None)!"
+    assert zeroMode in ['clip' , 'abs' , 'stretch'], \
+           "'zeroMode' must be one of: 'clip' , 'abs' , 'stretch'"
+    assert bits in type_dict.keys(), \
+           "'bits' must be one of 8, 16, 32, 64"
     
-    if bits not in type_dict.keys():
-        print "'bits' must be one of 8, 16, 32, 64"
-        return
+    type_dict = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}
     
-    maxClip = 2**bits-1
-    if maxVal==None:
-        maxVal=arr.max()
-    elif type(maxVal)==int:
-        if maxMode=='clip':
-            arr.clip(arr.min(),maxVal,out=arr) # in place
-        elif maxMode=='stretch':
-            # Now maxVal is used at the end instead...
-            maxClip = maxVal
-        else:
-            print "'maxMode' must be either 'clip' or 'stretch'"
-    else:
-        print "'maxVal' must be given as an integer (or None)!"
-        return
+    maxClip = (maxVal
+               if maxMode == 'stretch' and maxVal is not None else
+               2**bits-1)
     
-    minVal=0
+    if maxMode == 'clip' and maxVal is not None:
+        arr.clip(arr.min(), maxVal, out=arr) # in place
     
-    if zeroMode=='clip':
-        arr.clip(0,arr.max(),out=arr) # in place
-    elif zeroMode=='abs':
-        np.absolute(arr,arr) # in place
-    elif zeroMode=='stretch':
-        minVal=arr.min()
-    else:
-        print "'zeroMode' must be one of: 'clip' , 'abs' , 'stretch'"
+    minVal = arr.min() if zeroMode == 'stretch' else 0
+    maxVal = arr.max() if maxVal is None else maxVal
     
-    clipRatio = 1.*maxClip/(maxVal-minVal)
+    if zeroMode == 'clip':
+        arr.clip(0, arr.max(), out=arr) # in place
+    elif zeroMode == 'abs':
+        np.absolute(arr, out=arr) # in place
     
-    if zeroMode=='stretch' or clipRatio<1:
+    clipRatio = 1. * maxClip / (maxVal-minVal)
+    
+    if zeroMode == 'stretch' or clipRatio < 1:
         arr = np.double(arr)
         arr -= minVal # separate step cuts down on memory usage...
-        if clipRatio<1:
+        if clipRatio < 1:
             arr *= clipRatio
     
-    return np.array(arr,dtype=type_dict[bits])
+    return arr.astype(type_dict[bits])
 
 def ConvertTo8Bit(arr):
     return DivideConvertType(arr,8)    
@@ -107,60 +119,47 @@ def ConvertRGBImageTo16Bit(rgb):
     return np.array(rgb[:,:,::-2]).view(np.uint16).reshape(rgb.shape[:2])    
 
 def GetShape(filename=None):
-    if filename==None:
-        filename=wx.FileSelector()
-        print filename
-    im=Image.open(filename)
+    filename = _select_file_if_none(filename)
+    im = Image.open(filename)
     
-    if im.format in _tif_names:  datatype=np.uint16
-    elif im.format in _gif_names: datatype=np.uint8
+    assert im.format in (_tif_names + _gif_names), \
+           'Unsupported image format type! {0}'.format(im.format)
     
-    h,w=im.size
+    datatype = (np.uint16 if im.format in _tif_names else
+                np.uint8) # if im.format in _gif_names
     
-    numFrames=0
-    while 1:
-        numFrames+=1
+    h, w = im.size
+    
+    numFrames = 0
+    while True:
+        numFrames += 1
         try:
             im.seek(numFrames)
         except EOFError:
             break # end of sequence
     
-    return numFrames,w,h
+    return numFrames, w, h
 
-def GetDirectoryShape(dirname=None,wildcard='*[!.txt]',dims=1):
-    '''For data stored as image sequences, get the number of them'''
-    if dirname==None:
-        dirname=wx.DirSelector()
-        print dirname
-    
-    files = getSortedListOfFiles(dirname,globArg=wildcard)
-    
-    if len(files)==0:
-        print 'Empty Directory!'
-        return 0,[]
-    
-    if dims==1: # flat sequence (time series)
-        return len(files),files
-    elif dims==2: # series of z-stacks
-        l=[]
-        
-        for i in files:
-            e=os.path.split(i)[1]
-            if len(e.split('_'))>=3:
-                #print e,':', e.split('_')[0],e.split('_')[1],e.split('_')[2][:3]
-                #l.append([i,int(e.split('_')[1]),int(e.split('_')[2][:3])])
-                l.append([i,int(e.split('_')[-2]),int(e.split('_')[-1][:3])])
-        
-        if len(l)==0:
-            print 'Empty Directory!'
-            return [0,0],[]
-        
-        tdim=max([i[1] for i in l])+1
-        zdim=max([i[2] for i in l])+1
-        return [tdim,zdim],l
-    else:
-        print 'No code for 5D stacks... yet...'
-        return # Should throw downstream errors... just sayin...
+def GetDirectoryFiles(dirname=None, wildcard='*[!.txt]'):
+    dirname = _select_dir_if_none(dirname)
+    return getSortedListOfFiles(dirname, globArg=wildcard)
+
+def GetFilesAndIndices(dirname=None, wildcard='*[!.txt]', dims=1):
+    assert dims <= 2, 'No code for 5D+ stacks... yet...'
+    files = GetDirectoryFiles(dirname=None, wildcard='*[!.txt]')
+    if len(files) == 0:
+        return None
+    if dims == 1: # flat sequence (time series)
+        return files, len(files)
+    else: # series of z-stacks
+        ftz = []
+        for f in files:
+            s = os.path.split(f)[1].split('_')
+            if len(s) >= 3:
+                t = int(s[-2])
+                z = int(s[-1][:3])
+                ftz.append([f, t, z])
+        return zip(ftz)
 
 def GetDatatype(im, im_arr=None):
     """Automatically determine the datatype using the PIL -> numpy conversion."""
@@ -200,25 +199,16 @@ def GetDatatype(im, im_arr=None):
     return datatype
 
 def GetShapeMonolithicOrSequence(filename=None):
-    if filename==None:
-        filename=wx.FileSelector()
-        print filename
-    
-    numFrames,w,h = GetShape(filename)
-    
-    isSequence = False
-    
-    if numFrames == 1:
-        numFrames = len(getSortedListOfNumericalEquivalentFiles(
-                                    filename,os.path.split(filename)[0]
-                                                               ))
-        isSequence = True
-    return numFrames,w,h,isSequence
+    filename = _select_file_if_none(filename)
+    numFrames, w, h = GetShape(filename)
+    isSequence = (numFrames == 1)
+    if isSequence:
+        numFrames = len(get_ne_files(filename, os.path.split(filename)[0]))
+    return numFrames, w, h, isSequence
+
 
 def LoadSingle(filename=None):
-    if filename==None:
-        filename=wx.FileSelector()
-        print filename
+    filename = _select_file_if_none(filename)
     im=Image.open(filename)
     im_arr=np.array(im)
     # Try to automatically determine the datatype using the PIL -> numpy conversion.
@@ -242,169 +232,133 @@ def LoadSingle(filename=None):
 #    else:
 #        print "Just so you know... that ain't no tiff!"
 
+def _assert_valid_format(im_format, tiffBits):
+    assert im_format in _gif_names+_tif_names, \
+           'Unsupported Format!  Choose Gif or Tiff format'
+    assert tiffBits in [8, 16, 32], \
+           'Unsupported tiff format!  Choose 8, 16, or 32 bit.'
+
 # I also need to check for filenames with the same base in the selected folder
 # And then give a "stupidity check" for overwriting
+# d = wx.MessageDialog(None, 'Are you sure?')
+# d.ShowModal() == wx.ID_CANCEL
 # Same for Sequence and monolithic...
 # PIL saved images look stupid...  test manually again
 # PIL is too dubm to figure out TIF instead of TIFF -- Fix this...
-def SaveSingle(arr,filename=None,format='gif',tiffBits=16):
-    if format in _gif_names:
-        formatName='Gif'
-        datatype=np.uint8
-        bits=8
-    elif format in _tif_names:
-        formatName='Tiff'
-        if tiffBits==8:
-            datatype=np.uint8
-            bits=8
-        elif tiffBits==16:
-            datatype=np.uint16
-            bits=16
-        elif tiffBits==32:
-            datatype=np.float32
-            bits=32
-        else:
-            print 'Unsupported tiff format!  Choose 8, 16, or 32 bit.'
-            return
-    else:
-        print 'Unsupported Format!  Choose Gif or Tiff format'
-        return
+def SaveSingle(arr, filename=None, im_format='gif', tiffBits=16):
+    _assert_valid_format(im_format, tiffBits)
     
-    if filename==None:
+    formatName = ('Tiff' if im_format in _tif_names else
+                  'Gif') #if im_format in _gif_names
+    bits = 8 if im_format in _gif_names else tiffBits
+    datatype = {8: np.uint8, 16: np.uint16, 32: np.float32}[bits]
+    
+    if filename is None:
         filename=wx.SaveFileSelector('Array as '+formatName,'.'+format)
     
     # Make the directory if it does not exist
     if not os.path.exists(os.path.split(filename)[0]):
         os.mkdir(os.path.split(filename)[0])
     
-    if datatype!=arr.dtype:
-        if datatype in [np.uint8, np.uint16]:
-            arr=DivideConvertType(arr,bits=bits)
-        elif datatype==np.float32:
-            arr = np.array(arr,np.float32)
-    if datatype==np.uint8:
-        im=Image.fromarray(arr)
-    elif datatype==np.uint16:
-        im=Image.fromarray(arr,'I;16') # Should I ever use I;16B ???
-    elif datatype==np.float32:
-        im=Image.fromarray(arr,'F')
-    else:
-        print 'Unsupported tiff format!  Choose 8, 16, or 32 bit.'
-    im.save(filename,formatName)
+    if datatype != arr.dtype:
+        arr = (arr.astype(np.float32) if bits==32 else
+               DivideConvertType(arr, bits=bits))
+    mode = {8: None, 16: 'I;16', 32: 'F'}[bits] # Should I ever use I;16B ???
+    im = Image.fromarray(arr, mode=mode)
+    im.save(filename, formatName)
 
-def LoadFileSequence(dirname=None,wildcard='*[!.txt]'):
-    if dirname==None:
-        dirname=wx.DirSelector()
-        print dirname
-    
-    numFiles,files = GetDirectoryShape(dirname,wildcard)
+def LoadFileSequence(dirname=None, wildcard='*[!.txt]'):
+    files = GetDirectoryFiles(dirname, wildcard)
+    numFiles = len(files)
     
     if numFiles==0:
         return
     
-    t0=LoadSingle(files[0])
-    
-    t=np.zeros([numFiles,t0.shape[0],t0.shape[1]],t0.dtype)
+    t0 = LoadSingle(files[0])
+    t = np.zeros([numFiles, t0.shape[0], t0.shape[1]], t0.dtype)
     
     for i in range(numFiles):
-        t[i]=LoadSingle(files[i])
+        t[i] = LoadSingle(files[i])
     
     return t
 
-def SaveFileSequence(arr,basename=None,format='gif',tiffBits=16,sparseSave=None,functionToRunOnFrames=None):
+def SaveFileSequence(arr, basename=None, im_format='gif', tiffBits=16,
+                     sparseSave=None, functionToRunOnFrames=None):
     '''Save a sequence of files with the format _t_zzz where t is the
 stack number and zzz is the frame number.
 "tiffBits" should be 8 or 16.
 "sparseSave" should either be None (the default) or a boolean list the same shape as the z-t shape of the array.
 If specified, it determines which files should be saved and which should not.
 It is basically a way to save only SOME of the files in the sequence.'''
-    if basename==None:
-        basename=wx.SaveFileSelector('Array as Sequence of Gifs -- numbers automatically added to','.'+format)
+    _assert_valid_format(im_format, tiffBits)
+    assert arr.ndim <= 4,\
+          'SaveFileSequence does not support saving arrays with more than 4 dimensions!'
+    if basename is None:
+        basename=wx.SaveFileSelector('Array as Sequence of Gifs -- numbers automatically added to',
+                                     '.'+im_format)
     
-    if format in _gif_names:
-        pass
-    elif format in _tif_names:
-        if tiffBits not in [8,16,32]:
-            print 'Unsupported tiff format!  Choose 8 or 16 bit.'
-            return
-    else:
-        print 'Unsupported Format!  Choose Gif or Tiff format'
-        return
+    if arr.dtype == np.uint8 and arr.max() > 255: # THIS CAN NEVER ACTUALLY RUN
+        arr = np.array(arr * 255. / arr.max(), np.uint8)
     
-    if arr.dtype==np.uint8 and arr.max()>255:
-        arr=np.array(arr*255./arr.max(),np.uint8)
+    if functionToRunOnFrames is None:
+        functionToRunOnFrames = lambda x:x
     
-    if functionToRunOnFrames==None:
-        functionToRunOnFrames=( lambda x:x )
+    new_name = os.path.splitext(basename)[0] + '_{0}_{:03d}.' + im_format
     
-    if len(arr.shape)==2:
-        SaveSingle(functionToRunOnFrames(arr),os.path.splitext(basename)[0]+'_0_000'+'.'+format,format=format,tiffBits=tiffBits)
-    elif len(arr.shape)==3:
-        if sparseSave==None:
-            sparseSave=[True]*arr.shape[0]
-        for i in range(arr.shape[0]):
-            if sparseSave[i]:
-                SaveSingle(functionToRunOnFrames(arr[i]),os.path.splitext(basename)[0]+'_0_'+str('%03d' % i)+'.'+format,format=format,tiffBits=tiffBits)
-    elif len(arr.shape)==4:
-        if sparseSave==None:
-            sparseSave=[True]*arr.shape[0]
-            for i in range(arr.shape[0]):
-                sparseSave[i]=[True]*arr.shape[1]
-        for i in range(arr.shape[0]):
-            for j in range(arr.shape[1]):
-                if sparseSave[i][j]:
-                    SaveSingle(functionToRunOnFrames(arr[i,j]),os.path.splitext(basename)[0]+'_'+str(i)+'_'+str('%03d' % j)+'.'+format,format=format,tiffBits=tiffBits)
-    else:
-        print 'This function does not support saving arrays with more than 4 dimensions!'
-
+    # Pad arr with extra singleton dimesions to make the loop below work
+    arr = arr.reshape((1,)*(4-arr.ndim) + arr.shape)
+    
+    for i in range(sh[0]):
+        for j in range(sh[1]):
+            if (sparseSave is None) or sparseSave[i][j]:
+                SaveSingle(functionToRunOnFrames(arr[i,j]),
+                           new_name.format(i, j),
+                           im_format=im_format, tiffBits=tiffBits)
+    
 SaveFileSequence4D=SaveFileSequence
 
 def LoadMonolithic(filename=None):
     #f='C:/Documents and Settings/Owner/Desktop/Stack_Zproject_GBR_DC.gif'
-    if filename==None:
-        filename=wx.FileSelector()
-        print filename
-    im=Image.open(filename)
+    filename = _select_file_if_none(filename)
+    im = Image.open(filename)
     
     datatype = GetDatatype(im)
     
     l=[]
     numFrames=0
-    while 1:
-        l.append(np.asarray(im.getdata(),dtype=datatype))
-        numFrames+=1
+    while True:
+        l.append(np.asarray(im.getdata(), dtype=datatype))
+        numFrames += 1
         try:
-            im.seek(im.tell()+1)
+            im.seek(im.tell() + 1)
         except EOFError:
             break # end of sequence
     
-    t=np.array(l,dtype=datatype)
-    t.resize(numFrames,im.size[1],im.size[0])
+    t=np.array(l, dtype=datatype)
+    t.resize(numFrames, im.size[1], im.size[0])
     return t
 
 def LoadFrameFromMonolithic(filename=None,frameNum=0):
     #f='C:/Documents and Settings/Owner/Desktop/Stack_Zproject_GBR_DC.gif'
-    if filename==None:
-        filename=wx.FileSelector()
-        print filename
-    im=Image.open(filename)
+    filename = _select_file_if_none(filename)
+    im = Image.open(filename)
     
     datatype = GetDatatype(im)
     
-    t=None
-    i=0
-    while 1:
-        if i==frameNum:
-            t = np.asarray(im.getdata(),dtype=datatype)
-            t.resize(im.size[1],im.size[0])
+    t = None
+    i = 0
+    while True:
+        if i == frameNum:
+            t = np.asarray(im.getdata(), dtype=datatype)
+            t.resize(im.size[1], im.size[0])
             break
-        i+=1
+        i += 1
         try:
-            im.seek(im.tell()+1)
+            im.seek(im.tell() + 1)
         except EOFError:
             break # end of sequence
     
-    if t==None:
+    if t is None:
         print 'Frame not able to be loaded'
     
     return t
@@ -414,93 +368,89 @@ def SaveMonolithic(arr,filename=None):
     # Can I do monolithic Tiff, too??
 
 def LoadMonolithicOrSequenceSpecial(filename=None):
-    if filename==None:
-        filename=wx.FileSelector()
-        print filename
+    filename = _select_file_if_none(filename)
     
-    numFrames,w,h,isSequence = GetShapeMonolithicOrSequence(filename)
+    numFrames, w, h, isSequence = GetShapeMonolithicOrSequence(filename)
     
     if isSequence:
-        files = getSortedListOfNumericalEquivalentFiles(
-                                    filename,os.path.split(filename)[0])
+        files = get_ne_files(filename, os.path.split(filename)[0])
         if len(files)==0:
             print 'Empty Directory!'
             return
         t0=LoadSingle(files[0])
         
-        t=np.zeros([len(files),t0.shape[0],t0.shape[1]],t0.dtype)
+        t=np.zeros([len(files), t0.shape[0], t0.shape[1]], t0.dtype)
         
         for i in range(len(files)):
-            t[i]=LoadSingle(files[i])
+            t[i] = LoadSingle(files[i])
         
         return t
     else:
         return LoadMonolithic(filename)
 
-def LoadSequence4D(dirname=None,wildcard='*[!.txt]'):
-    if dirname==None:
-        dirname=wx.DirSelector()
-        print dirname
+def LoadSequence4D(dirname=None, wildcard='*[!.txt]'):
+    dirname = _select_dir_if_none(dirname)
     
-    [tdim,zdim],files = GetDirectoryShape(dirname,wildcard,dims=2)
+    files, t_inds, z_inds = GetFilesAndIndices(dirname, wildcard, dims=2)
     
-    if len(files)==0:
+    if not files:
         print 'Empty Directory!'
         return
     
-    test=LoadSingle(files[0][0])
+    test = LoadSingle(files[0][0])
     
-    [xdim,ydim]=test.shape
+    tdim, zdim = [max(i) + 1 for i in [t_inds, z_inds]]
+    xdim, ydim = test.shape
+    arr = np.zeros([tdim, zdim, xdim, ydim], test.dtype)
     
-    t=np.zeros([tdim,zdim,xdim,ydim],test.dtype)
+    #load the data for each gif directly into one big array, indexing based on numbering
+    for f, t, z in zip(files, t_inds, z_inds):
+        arr[t, z] = LoadSingle(f)
     
-    for i in files:
-        t[i[1],i[2]]=LoadSingle(i[0]) #load the data for each gif directly into one big array, indexing based on numbering
-    
-    return t
+    return arr
 
-def LoadMonolithicSequence4D(dirname=None,wildcard='*[!.txt]'):
-    if dirname==None:
-        dirname=wx.DirSelector()
-        print dirname
-    files = getSortedListOfFiles(dirname,globArg=wildcard)
+def LoadMonolithicSequence4D(dirname=None, wildcard='*[!.txt]'):
+    files = GetDirectoryFiles(dirname, wildcard)
+    
     if len(files)==0:
         print 'Empty Directory!'
         return
-    t0=LoadMonolithic(files[0])
     
-    t=np.zeros([len(files)]+list(t0.shape),t0.dtype)
+    t0 = LoadMonolithic(files[0])
+    
+    t = np.zeros([len(files)] + list(t0.shape), t0.dtype)
     
     for i in range(len(files)):
-        t[i]=LoadMonolithic(files[i])
+        t[i] = LoadMonolithic(files[i])
     
     return t
 
-def LoadGroupedZCroppedByTxtInput(dirname,StartStopTxt,mergeOperation=None):
+def LoadGroupedZCroppedByTxtInput(dirname, StartStopTxt, mergeOperation=None):
     """StartStopTxt gives the range to load for each stack... "0: 4-9\n1: 5-10\n2: 5-11"
 The stack number before the colon is NOT ACTUALLY USED, stacks are just processed in order.
 For mergeOperation, select 'None','mean','max','min',or 'sum'"""
-    StartStop = [map(int,i.replace(' ','').split(':')[1].split('-')) for i in StartStopTxt.split('\n')]
+    StartStop = [map(int,i.replace(' ','').split(':')[1].split('-'))
+                 for i in StartStopTxt.split('\n')]
     stacks = []
     for i,p in enumerate(StartStop):
         stacks.append([])
-        files = getSortedListOfFiles(dirname,globArg="*_"+str(i)+"_*PMT1.TIF")
+        files = getSortedListOfFiles(dirname, globArg="*_"+str(i)+"_*PMT1.TIF")
         files = files[p[0]:p[1]+1] # only pick out some files
         for f in files:
             stacks[-1].append(LoadSingle(f))
-        stacks[-1]=np.array(stacks[-1])
+        stacks[-1] = np.array(stacks[-1])
     
-    if mergeOperation in ['mean','max','min','sum']:
+    if mergeOperation in ['mean', 'max', 'min', 'sum']:
         return np.array([i.__getattribute__(mergeOperation)(axis=0) for i in stacks])
-    elif mergeOperation!=None:
+    elif mergeOperation != None:
         print 'Invalid mergeOperation!  Returning the stacks list instead'
     
     return stacks # has to be a list not an array b/c elements might not be the same length
         
 
 if __name__=='__main__':
-    app=wx.App(0)
-    t=LoadFileSequence()
-    print 'Loaded an array of type',t.dtype,'with shape',t.shape
+    app = wx.App(0)
+    t = LoadFileSequence()
+    print 'Loaded an array of type', t.dtype, 'with shape', t.shape
     
     import DelayApp
