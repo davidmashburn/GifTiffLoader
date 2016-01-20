@@ -44,22 +44,21 @@ def _select_dir_if_none(dirname, use_print=False):
             print dirname
     
     return dirname
-    
 
 def DivideConvertType(arr, bits=16, maxVal=None, zeroMode='clip',
                       maxMode='clip'):
+    type_dict = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}
+    
     #Get datatype from bits...
     # Note that this function is only useful for unsigned ints!
     assert maxMode in ['clip', 'stretch'], \
            "'maxMode' must be either 'clip' or 'stretch'"
-    assert type(maxVal) == [type(None), int], \
+    assert type(maxVal) in [type(None), int], \
            "'maxVal' must be given as an integer (or None)!"
     assert zeroMode in ['clip' , 'abs' , 'stretch'], \
            "'zeroMode' must be one of: 'clip' , 'abs' , 'stretch'"
     assert bits in type_dict.keys(), \
            "'bits' must be one of 8, 16, 32, 64"
-    
-    type_dict = {8: np.uint8, 16: np.uint16, 32: np.uint32, 64: np.uint64}
     
     maxClip = (maxVal
                if maxMode == 'stretch' and maxVal is not None else
@@ -303,13 +302,19 @@ It is basically a way to save only SOME of the files in the sequence.'''
     if functionToRunOnFrames is None:
         functionToRunOnFrames = lambda x:x
     
-    new_name = os.path.splitext(basename)[0] + '_{0}_{:03d}.' + im_format
+    new_name = os.path.splitext(basename)[0] + '_{}_{:03d}.' + im_format
     
     # Pad arr with extra singleton dimesions to make the loop below work
     arr = arr.reshape((1,)*(4-arr.ndim) + arr.shape)
     
-    for i in range(sh[0]):
-        for j in range(sh[1]):
+    # Add singleton dimensions to sparseSave if needed
+    if (sparseSave is not None and
+        len(sparseSave) and
+        not hasattr(sparseSave[0], '__iter__')):
+        sparseSave = [[i] for i in sparseSave]
+    
+    for i in range(arr.shape[0]):
+        for j in range(arr.shape[1]):
             if (sparseSave is None) or sparseSave[i][j]:
                 SaveSingle(functionToRunOnFrames(arr[i,j]),
                            new_name.format(i, j),
