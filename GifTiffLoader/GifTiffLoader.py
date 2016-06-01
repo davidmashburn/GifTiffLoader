@@ -284,11 +284,14 @@ def LoadFileSequence(dirname=None, wildcard='*[!.txt]'):
 def SaveFileSequence(arr, basename=None, im_format='gif', tiffBits=16,
                      sparseSave=None, functionToRunOnFrames=None):
     '''Save a sequence of files with the format _t_zzz where t is the
-stack number and zzz is the frame number.
-"tiffBits" should be 8 or 16.
-"sparseSave" should either be None (the default) or a boolean list the same shape as the z-t shape of the array.
-If specified, it determines which files should be saved and which should not.
-It is basically a way to save only SOME of the files in the sequence.'''
+    stack number and zzz is the frame number.
+    "tiffBits" should be 8 or 16.
+    "sparseSave" should either be None (the default) or a boolean list the same shape as the z-t shape of the array.
+    If specified, it determines which files should be saved and which should not.
+    It is basically a way to save only SOME of the files in the sequence.
+
+    If a single (2D) image is passed, z and t will be set to 0,0.
+    If a 3D image is passed, t will always be 0'''
     _assert_valid_format(im_format, tiffBits)
     assert arr.ndim <= 4,\
           'SaveFileSequence does not support saving arrays with more than 4 dimensions!'
@@ -311,7 +314,12 @@ It is basically a way to save only SOME of the files in the sequence.'''
     if (sparseSave is not None and
         len(sparseSave) and
         not hasattr(sparseSave[0], '__iter__')):
-        sparseSave = [[i] for i in sparseSave]
+        if arr.shape[0] == 1:
+            sparseSave = [sparseSave]
+        elif arr.shape[1] == 1:
+            sparseSave = [[i] for i in sparseSave] # 3D time array passed
+        else:
+            raise ValueError('sparseSave must be nested for a fully 4D arr!')
     
     for i in range(arr.shape[0]):
         for j in range(arr.shape[1]):
@@ -432,8 +440,8 @@ def LoadMonolithicSequence4D(dirname=None, wildcard='*[!.txt]'):
 
 def LoadGroupedZCroppedByTxtInput(dirname, StartStopTxt, mergeOperation=None):
     """StartStopTxt gives the range to load for each stack... "0: 4-9\n1: 5-10\n2: 5-11"
-The stack number before the colon is NOT ACTUALLY USED, stacks are just processed in order.
-For mergeOperation, select 'None','mean','max','min',or 'sum'"""
+    The stack number before the colon is NOT ACTUALLY USED, stacks are just processed in order.
+    For mergeOperation, select 'None','mean','max','min',or 'sum'"""
     StartStop = [map(int,i.replace(' ','').split(':')[1].split('-'))
                  for i in StartStopTxt.split('\n')]
     stacks = []
