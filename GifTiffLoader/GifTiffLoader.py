@@ -9,6 +9,9 @@ GifTiffLoader also relies on wxPython and FilenameSort.
 Sponsored by the NSF and HFSP through the Shane Hutson Laboratory, part of
 Vanderbilt Institute of Integrative Biosystems Research (VIIBRE)."""
 
+from __future__ import absolute_import
+from __future__ import print_function
+
 __author__ = "David N. Mashburn <david.n.mashburn@gmail.com>"
 
 import os
@@ -33,7 +36,7 @@ def _select_file_if_none(filename, use_print=False):
     if filename is None:
         filename = wx.FileSelector()
         if use_print:
-            print filename
+            print(filename)
     
     return filename
 
@@ -41,7 +44,7 @@ def _select_dir_if_none(dirname, use_print=False):
     if dirname is None:
         dirname = wx.DirSelector()
         if use_print:
-            print dirname
+            print(dirname)
     
     return dirname
 
@@ -57,7 +60,7 @@ def DivideConvertType(arr, bits=16, maxVal=None, zeroMode='clip',
            "'maxVal' must be given as an integer (or None)!"
     assert zeroMode in ['clip' , 'abs' , 'stretch'], \
            "'zeroMode' must be one of: 'clip' , 'abs' , 'stretch'"
-    assert bits in type_dict.keys(), \
+    assert bits in list(type_dict.keys()), \
            "'bits' must be one of 8, 16, 32, 64"
     
     maxClip = (maxVal
@@ -158,7 +161,7 @@ def GetFilesAndIndices(dirname=None, wildcard='*[!.txt]', dims=1):
                 t = int(s[-2])
                 z = int(s[-1][:3])
                 ftz.append([f, t, z])
-        return zip(ftz)
+        return list(zip(ftz))
 
 def GetDatatype(im, im_arr=None):
     """Automatically determine the datatype using the PIL -> numpy conversion."""
@@ -181,18 +184,18 @@ def GetDatatype(im, im_arr=None):
         elif im.mode in ['I;16', 'I;16B']: # 16-bit gray scale
             datatype = np.uint16
         elif im.mode in ['I','F']: # 32-bit gray scale (int and float)
-            print '32-bit images not supported at this time!'
+            print('32-bit images not supported at this time!')
         else:
-            print 'Unknown image type!  Assume to 16-bit...'
+            print('Unknown image type!  Assume to 16-bit...')
             datatype = np.uint16
     elif im_arr.dtype in [np.uint8,np.uint16,np.float32]:
         datatype = im_arr.dtype
     elif im_arr.dtype in [np.int16, np.dtype('>u2'), np.dtype('>i2')]:
         datatype = np.uint16 # Convert from int16 to uint16 (same as what ImageJ does [I think])
     else:
-        print 'What kind of image format is this anyway???'
-        print 'Datatype looks like:', t.dtype
-        print 'Should be a 16 or 32 bit tiff or 8 bit unsigned gif or tiff'
+        print('What kind of image format is this anyway???')
+        print('Datatype looks like:', t.dtype)
+        print('Should be a 16 or 32 bit tiff or 8 bit unsigned gif or tiff')
         return
     
     return datatype
@@ -372,7 +375,7 @@ def LoadFrameFromMonolithic(filename=None,frameNum=0):
             break # end of sequence
     
     if t is None:
-        print 'Frame not able to be loaded'
+        print('Frame not able to be loaded')
     
     return t
 
@@ -388,7 +391,7 @@ def LoadMonolithicOrSequenceSpecial(filename=None):
     if isSequence:
         files = get_ne_files(filename, os.path.split(filename)[0])
         if len(files)==0:
-            print 'Empty Directory!'
+            print('Empty Directory!')
             return
         t0=LoadSingle(files[0])
         
@@ -407,7 +410,7 @@ def LoadSequence4D(dirname=None, wildcard='*[!.txt]'):
     files, t_inds, z_inds = GetFilesAndIndices(dirname, wildcard, dims=2)
     
     if not files:
-        print 'Empty Directory!'
+        print('Empty Directory!')
         return
     
     test = LoadSingle(files[0][0])
@@ -426,7 +429,7 @@ def LoadMonolithicSequence4D(dirname=None, wildcard='*[!.txt]'):
     files = GetDirectoryFiles(dirname, wildcard)
     
     if len(files)==0:
-        print 'Empty Directory!'
+        print('Empty Directory!')
         return
     
     t0 = LoadMonolithic(files[0])
@@ -442,7 +445,7 @@ def LoadGroupedZCroppedByTxtInput(dirname, StartStopTxt, mergeOperation=None):
     """StartStopTxt gives the range to load for each stack... "0: 4-9\n1: 5-10\n2: 5-11"
     The stack number before the colon is NOT ACTUALLY USED, stacks are just processed in order.
     For mergeOperation, select 'None','mean','max','min',or 'sum'"""
-    StartStop = [map(int,i.replace(' ','').split(':')[1].split('-'))
+    StartStop = [list(map(int,i.replace(' ','').split(':')[1].split('-')))
                  for i in StartStopTxt.split('\n')]
     stacks = []
     for i,p in enumerate(StartStop):
@@ -456,7 +459,7 @@ def LoadGroupedZCroppedByTxtInput(dirname, StartStopTxt, mergeOperation=None):
     if mergeOperation in ['mean', 'max', 'min', 'sum']:
         return np.array([i.__getattribute__(mergeOperation)(axis=0) for i in stacks])
     elif mergeOperation != None:
-        print 'Invalid mergeOperation!  Returning the stacks list instead'
+        print('Invalid mergeOperation!  Returning the stacks list instead')
     
     return stacks # has to be a list not an array b/c elements might not be the same length
         
@@ -464,6 +467,6 @@ def LoadGroupedZCroppedByTxtInput(dirname, StartStopTxt, mergeOperation=None):
 if __name__=='__main__':
     app = wx.App(0)
     t = LoadFileSequence()
-    print 'Loaded an array of type', t.dtype, 'with shape', t.shape
+    print('Loaded an array of type', t.dtype, 'with shape', t.shape)
     
     import DelayApp
